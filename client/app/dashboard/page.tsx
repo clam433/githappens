@@ -14,11 +14,26 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("overview")
 
   const charts = [
-    { title: "Sessions and time on site", chartId: "a8pfh6bs" },
-    { title: "Page views and navigation", chartId: "ngymo109" },
-    { title: "Clicks and UI interactions", chartId: "i07trv5p" },
-    { title: "Funnels and conversion", chartId: "y2ymbsz4" },
-    { title: "Pricing tier at time of event", chartId: "diiav9zr" },
+    {
+      title: "Sessions and time on site",
+      embedUrl: "https://app.amplitude.com/analytics/share/8e6da5c8732a48cd8c13eac1f716534b",
+    },
+    {
+      title: "Page views and navigation",
+      embedUrl: "https://app.amplitude.com/analytics/share/a51087d7d47645d1b07b6828e125b7a9",
+    },
+    {
+      title: "Clicks and UI interactions",
+      embedUrl: "https://app.amplitude.com/analytics/share/7e40c42027124fae8b7885f274f6bc4b",
+    },
+    {
+      title: "Funnels and conversion",
+      embedUrl: "https://app.amplitude.com/analytics/share/af6ff9a830d944398a5ce7997cb36846",
+    },
+    {
+      title: "Pricing tier at time of event",
+      embedUrl: "https://app.amplitude.com/analytics/share/4df13816c0da4ebe9b208e2691343827",
+    },
   ]
 
   return (
@@ -40,17 +55,11 @@ export default function DashboardPage() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 {charts.map((c) => (
-                  <ChartCard key={c.chartId} chartId={c.chartId} title={c.title} />
+                  <ChartCard key={c.title} title={c.title} embedUrl={c.embedUrl} />
                 ))}
               </div>
             </div>
           )}
-
-          {/* {activeTab === "profile" && (
-            <div className="w-full h-full flex items-center justify-center">
-              <ProfileCard />
-            </div>
-          )} */}
 
           {activeTab === "journey" && <ShopperJourney />}
           {activeTab === "incentives" && <IncentiveEngine />}
