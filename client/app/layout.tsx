@@ -44,11 +44,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <Amplitude />
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <Providers>{children}</Providers>
+        <Amplitude />
+        {children}
       </body>
     </html>
   );
