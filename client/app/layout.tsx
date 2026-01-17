@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Amplitude } from '@/amplitude';
 import Providers from './AmplitudeProvider';
 import "./globals.css";
 
@@ -44,7 +43,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <Amplitude />
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
