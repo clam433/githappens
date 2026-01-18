@@ -3,12 +3,8 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Amplitude } from "@/amplitude"
 import { ThemeProvider } from "@/components/theme-provider"
-<<<<<<< HEAD
-import { ShopperMetricsProvider } from "@/context/ShopperMetricsContext"
-=======
-import { CartProvider } from "@/context/CartContext"
 import { UIOptimizationProvider } from "@/context/UIOptimizationContext"
->>>>>>> origin/main
+import { CartProvider } from "@/context/CartContext"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -32,25 +28,18 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Amplitude />
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark">
-<<<<<<< HEAD
-          <ShopperMetricsProvider>
-            {children}
-          </ShopperMetricsProvider>
-=======
           <UIOptimizationProvider>
             <CartProvider>
               {children}
             </CartProvider>
           </UIOptimizationProvider>
->>>>>>> origin/main
         </ThemeProvider>
       </body>
     </html>
   )
 }
-
 

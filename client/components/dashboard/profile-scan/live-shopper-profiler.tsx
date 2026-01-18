@@ -91,6 +91,9 @@ export function LiveShopperProfiler() {
   const [isMorphing, setIsMorphing] = useState(false)
   const [showDetails, setShowDetails] = useState(true)
   const [inputValue, setInputValue] = useState("")
+  const intervalRef = useRef<NodeJS.Timeout>(undefined)
+
+  const currentProfile = SHOPPER_PROFILES[currentProfileIndex]
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
