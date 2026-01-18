@@ -1,11 +1,13 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { AnimatedRadarChart } from "./animated-radar-chart"
 import { Activity, Zap, Clock, MousePointer, ChevronRight } from "lucide-react"
+import { parseAmplitudeCsv } from "@/lib/parseCsv"
+import { buildSingleProfileFromCharts } from "@/lib/profile"
 
 interface ShopperProfile {
-  type: string
+  type: "Confident Shopper" | "Non-Confident Shopper"
   traits: number[]
   confidence: number
   signals: string[]
@@ -19,99 +21,55 @@ interface ShopperProfile {
 
 const TRAIT_LABELS = ["Hesitancy", "Price Sense", "Research", "Decision", "Engagement"]
 
-const SHOPPER_PROFILES: ShopperProfile[] = [
-  {
-    type: "Hesitant Researcher",
-    traits: [20, 30, 95, 35, 85],
-    confidence: 94,
-    signals: ["Multiple category views", "Feature comparisons", "Review reading"],
-    incentive: "Extended Research Window",
-    incentiveReason: "Reduces time pressure anxiety",
-    sessionId: "SH-7829A",
-    timeOnSite: "4m 32s",
-    signalsDetected: 12,
-    lastBehavior: "Opened size guide",
-  },
-  {
-    type: "Price-Conscious",
-    traits: [75, 95, 45, 60, 55],
-    confidence: 88,
-    signals: ["Cart price checks", "Competitor tab open", "Discount code attempt"],
-    incentive: "Volume-Based Discount",
-    incentiveReason: "Addresses value perception",
-    sessionId: "SH-4521B",
-    timeOnSite: "2m 18s",
-    signalsDetected: 8,
-    lastBehavior: "Removed item from cart",
-  },
-  {
-    type: "Anxious Buyer",
-    traits: [85, 60, 55, 25, 40],
-    confidence: 91,
-    signals: ["Add-to-cart hesitation", "Return policy views", "Trust badge hovers"],
-    incentive: "Risk-Free Returns",
-    incentiveReason: "Eliminates purchase anxiety",
-    sessionId: "SH-9183C",
-    timeOnSite: "6m 45s",
-    signalsDetected: 15,
-    lastBehavior: "Viewed shipping FAQ",
-  },
-  {
-    type: "Ready Buyer",
-    traits: [15, 40, 35, 95, 80],
-    confidence: 92,
-    signals: ["Direct navigation", "Quick add-to-cart", "Payment page visit"],
-    incentive: "Priority Shipping",
-    incentiveReason: "Maximizes high intent",
-    sessionId: "SH-6734D",
-    timeOnSite: "1m 12s",
-    signalsDetected: 5,
-    lastBehavior: "Entered checkout",
-  },
-  {
-    type: "Window Shopper",
-    traits: [50, 45, 70, 50, 75],
-    confidence: 85,
-    signals: ["Casual browsing", "Wishlist additions", "Newsletter hover"],
-    incentive: "Early Access Offer",
-    incentiveReason: "Nurtures future conversion",
-    sessionId: "SH-2847E",
-    timeOnSite: "8m 03s",
-    signalsDetected: 9,
-    lastBehavior: "Saved to wishlist",
-  },
-]
-
-const CYCLE_DURATION = 5000
-
 export function LiveShopperProfiler() {
-  const [currentProfileIndex, setCurrentProfileIndex] = useState(0)
+  const [profile, setProfile] = useState<ShopperProfile | null>(null)
   const [isMorphing, setIsMorphing] = useState(false)
   const [showDetails, setShowDetails] = useState(true)
   const [inputValue, setInputValue] = useState("")
-  const intervalRef = useRef<NodeJS.Timeout>()
-
-  const currentProfile = SHOPPER_PROFILES[currentProfileIndex]
 
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setIsMorphing(true)
-      setShowDetails(false)
+    async function load() {
+      try {
+        setIsMorphing(true)
+        setShowDetails(false)
 
-      setTimeout(() => {
-        setIsMorphing(false)
-        setShowDetails(true)
-      }, 1200)
+        const AVG_SESSION_CHART_ID = "qkrahmgz"
+        const CHECKOUT_TIME_CHART_ID = "1tvzngd9"
 
-      setCurrentProfileIndex((prev) => (prev + 1) % SHOPPER_PROFILES.length)
-    }, CYCLE_DURATION)
+        const [avgCsv, checkoutCsv] = await Promise.all([
+          fetch(`/api/amplitude/chart/${AVG_SESSION_CHART_ID}/csv`, { cache: "no-store" }).then((r) => r.text()),
+          fetch(`/api/amplitude/chart/${CHECKOUT_TIME_CHART_ID}/csv`, { cache: "no-store" }).then((r) => r.text()),
+        ])
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
+        const avgParsed = parseAmplitudeCsv(avgCsv)
+        const checkoutParsed = parseAmplitudeCsv(checkoutCsv)
+
+        const computed = buildSingleProfileFromCharts({
+          avgSession: avgParsed,
+          checkout: checkoutParsed,
+        })
+
+        setProfile(computed)
+      } catch (e) {
+        console.error("Profiler load failed:", e)
+        setProfile(null)
+      } finally {
+        setTimeout(() => {
+          setIsMorphing(false)
+          setShowDetails(true)
+        }, 800)
+      }
     }
-  }, [currentProfileIndex])
 
-  // Get status color based on confidence
+    load()
+  }, [])
+
+  const currentProfile = profile
+
+  if (!currentProfile) {
+    return <div className="w-full h-full bg-black text-zinc-300 p-4">Loading profile…</div>
+  }
+
   const getStatusColor = (confidence: number) => {
     if (confidence >= 90) return "bg-emerald-500"
     if (confidence >= 80) return "bg-yellow-500"
@@ -144,16 +102,9 @@ export function LiveShopperProfiler() {
               </span>
             </div>
           </div>
-          <div className="flex gap-1">
-            {SHOPPER_PROFILES.map((_, i) => (
-              <div
-                key={i}
-                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                  i === currentProfileIndex ? "bg-cyan-400" : "bg-zinc-700"
-                }`}
-              />
-            ))}
-          </div>
+
+          {/* single status dot */}
+          <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
         </div>
 
         {/* Main grid layout */}
@@ -210,31 +161,21 @@ export function LiveShopperProfiler() {
             </div>
           </div>
 
-          {/* Center - Polygraph (dominant) */}
+          {/* Center - Radar */}
           <div className="col-span-6 row-span-5 flex items-center justify-center relative">
-            {/* Ambient glow */}
             <div
               className="absolute inset-0 flex items-center justify-center pointer-events-none"
               style={{
                 background: `radial-gradient(circle at center, rgba(0, 255, 255, 0.03) 0%, transparent 60%)`,
               }}
             />
-
-            {/* Radar Chart */}
             <div className="w-full h-full max-w-[500px] max-h-[500px] aspect-square">
-              <AnimatedRadarChart
-                data={currentProfile.traits}
-                labels={TRAIT_LABELS}
-                isMorphing={isMorphing}
-              />
+              <AnimatedRadarChart data={currentProfile.traits} labels={TRAIT_LABELS} isMorphing={isMorphing} />
             </div>
           </div>
 
-          {/* Right Top Panel - Profile Status */}
-          <div
-            className="col-span-3 row-span-2 transition-opacity duration-500"
-            style={{ opacity: showDetails ? 1 : 0.3 }}
-          >
+          {/* Right Top - Status */}
+          <div className="col-span-3 row-span-2 transition-opacity duration-500" style={{ opacity: showDetails ? 1 : 0.3 }}>
             <div className="bg-zinc-900/40 backdrop-blur border border-zinc-800/50 rounded-lg p-4 h-full">
               <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Profile Status</h3>
 
@@ -274,11 +215,8 @@ export function LiveShopperProfiler() {
             </div>
           </div>
 
-          {/* Right Middle Panel - Engagement Signals */}
-          <div
-            className="col-span-3 row-span-2 transition-opacity duration-500"
-            style={{ opacity: showDetails ? 1 : 0.3 }}
-          >
+          {/* Right Middle - Trait bars */}
+          <div className="col-span-3 row-span-2 transition-opacity duration-500" style={{ opacity: showDetails ? 1 : 0.3 }}>
             <div className="bg-zinc-900/40 backdrop-blur border border-zinc-800/50 rounded-lg p-4 h-full">
               <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Engagement Signals</h3>
 
@@ -309,13 +247,9 @@ export function LiveShopperProfiler() {
             </div>
           </div>
 
-          {/* Right Bottom Panel - Recommended Action */}
-          <div
-            className="col-span-3 row-span-2 transition-opacity duration-500"
-            style={{ opacity: showDetails ? 1 : 0.3 }}
-          >
+          {/* Right Bottom - Recommended Action */}
+          <div className="col-span-3 row-span-2 transition-opacity duration-500" style={{ opacity: showDetails ? 1 : 0.3 }}>
             <div className="bg-zinc-900/40 backdrop-blur border border-cyan-900/30 rounded-lg p-4 h-full relative overflow-hidden">
-              {/* Subtle glow */}
               <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent pointer-events-none" />
 
               <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3 relative">
@@ -333,10 +267,7 @@ export function LiveShopperProfiler() {
 
                 <div className="flex items-center gap-2 pt-2">
                   <div className="h-1 flex-1 bg-zinc-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full"
-                      style={{ width: "78%" }}
-                    />
+                    <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" style={{ width: "78%" }} />
                   </div>
                   <span className="text-[10px] font-mono text-emerald-400">+78% lift</span>
                 </div>
@@ -344,23 +275,14 @@ export function LiveShopperProfiler() {
             </div>
           </div>
 
-          {/* Bottom Left - Detected Signals Log */}
-          <div
-            className="col-span-3 row-span-2 transition-opacity duration-500"
-            style={{ opacity: showDetails ? 1 : 0.3 }}
-          >
+          {/* Bottom Left - Signal Log */}
+          <div className="col-span-3 row-span-2 transition-opacity duration-500" style={{ opacity: showDetails ? 1 : 0.3 }}>
             <div className="bg-zinc-900/40 backdrop-blur border border-zinc-800/50 rounded-lg p-4 h-full">
               <h3 className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest mb-3">Signal Log</h3>
 
               <div className="space-y-2">
                 {currentProfile.signals.map((signal, i) => (
-                  <div
-                    key={`${currentProfile.type}-${i}`}
-                    className="flex items-center gap-2 text-xs transition-all duration-300"
-                    style={{
-                      transitionDelay: `${i * 100}ms`,
-                    }}
-                  >
+                  <div key={`${currentProfile.type}-${i}`} className="flex items-center gap-2 text-xs transition-all duration-300">
                     <div className="w-1 h-1 rounded-full bg-cyan-400" />
                     <span className="text-zinc-400">{signal}</span>
                   </div>
