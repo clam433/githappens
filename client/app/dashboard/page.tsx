@@ -27,6 +27,10 @@ export default function DashboardPage() {
       title: "Pricing tier at time of event",
       embedUrl: "https://app.amplitude.com/analytics/share/426baf86e1f744abb64f34419a4ee552",
     },
+    {
+      title: "Average time shopping",
+      embedUrl: "https://app.amplitude.com/analytics/share/e8e1be46c75a463cbdb9c88711bc0062",
+    },
   ]
 
   return (
