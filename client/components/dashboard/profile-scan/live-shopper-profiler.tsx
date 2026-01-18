@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import { AnimatedRadarChart } from "./animated-radar-chart"
 import { Activity, Zap, Clock, MousePointer, ChevronRight } from "lucide-react"
+import { parseAmplitudeCsv } from "@/lib/parseCsv"
+import { buildSingleProfileFromCharts } from "@/lib/profile"
 
 interface ShopperProfile {
   type: string
@@ -89,9 +91,6 @@ export function LiveShopperProfiler() {
   const [isMorphing, setIsMorphing] = useState(false)
   const [showDetails, setShowDetails] = useState(true)
   const [inputValue, setInputValue] = useState("")
-  const intervalRef = useRef<NodeJS.Timeout>(undefined)
-
-  const currentProfile = SHOPPER_PROFILES[currentProfileIndex]
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
