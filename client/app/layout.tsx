@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Amplitude } from "@/amplitude"
 import { ThemeProvider } from "@/components/theme-provider"
+import { ShopperMetricsProvider } from "@/context/ShopperMetricsContext"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -30,7 +31,9 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Amplitude />
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} forcedTheme="dark">
-          {children}
+          <ShopperMetricsProvider>
+            {children}
+          </ShopperMetricsProvider>
         </ThemeProvider>
       </body>
     </html>
