@@ -41,7 +41,13 @@ class LiveEventBus {
             this.events.shift();
         }
         // Notify local listeners
-        this.listeners.forEach(listener => listener(event));
+        this.listeners.forEach(listener => {
+            try {
+                listener(event);
+            } catch (e) {
+                console.error('Error in LiveEventBus listener (cross-tab)', e);
+            }
+        });
     }
 
     push(eventType: string, properties?: Record<string, unknown>) {
@@ -58,7 +64,13 @@ class LiveEventBus {
         }
 
         // Notify local listeners
-        this.listeners.forEach(listener => listener(event));
+        this.listeners.forEach(listener => {
+            try {
+                listener(event);
+            } catch (e) {
+                console.error('Error in LiveEventBus listener', e);
+            }
+        });
 
         // Broadcast to other tabs
         if (this.channel) {

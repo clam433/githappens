@@ -61,7 +61,9 @@ export function initAmplitude() {
     },
   });
 
-  experiment.start();
+  if (process.env.NEXT_PUBLIC_AMPLITUDE_EXPERIMENT_DEPLOYMENT_KEY) {
+    experiment.start().catch((e) => console.warn("Experiment start failed", e));
+  }
 
   isInitialized = true;
 }

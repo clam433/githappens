@@ -13,13 +13,20 @@ export function Header() {
         comboDealsEnabled,
         toggleComboDeals,
         lowStockAlertEnabled,
-        toggleLowStockAlert
+        toggleLowStockAlert,
+        resetAI
     } = useUIOptimization();
 
     return (
         <header className="fixed top-0 left-16 md:left-56 right-0 h-16 glass z-40 flex items-center justify-between px-6">
-            <div>
-                <h1 className="text-xl font-semibold">Sticker Shop</h1>
+            <div className="flex flex-col">
+                <div className="flex items-center gap-2">
+                    <h1 className="text-xl font-semibold">Sticker Shop</h1>
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20">
+                        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-primary">Detective Active</span>
+                    </div>
+                </div>
                 <p className="text-sm text-muted-foreground">UofTHacks 13 Merch</p>
             </div>
 
@@ -86,6 +93,13 @@ export function Header() {
                                 }`}
                         />
                     </div>
+                </button>
+
+                <button
+                    onClick={resetAI}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500/20 transition-all mr-2"
+                >
+                    Reset AI
                 </button>
 
                 <Link

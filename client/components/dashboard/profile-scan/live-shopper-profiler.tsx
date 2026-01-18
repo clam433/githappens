@@ -83,33 +83,72 @@ const SHOPPER_PROFILES: ShopperProfile[] = [
   },
 ]
 
+// Default empty profile
+const DEFAULT_PROFILE: ShopperProfile = {
+  type: "Analyzing...",
+  traits: [10, 10, 10, 10, 10],
+  confidence: 0,
+  signals: [],
+  incentive: "Analyzing...",
+  incentiveReason: "Waiting for user action",
+  sessionId: "LIVE-SESSION",
+  timeOnSite: "0m 0s",
+  signalsDetected: 0,
+  lastBehavior: "Waiting..."
+}
+
 const CYCLE_DURATION = 5000
 
+import { liveEventBus } from "@/lib/liveEventBus"
+
 export function LiveShopperProfiler() {
-  const [currentProfileIndex, setCurrentProfileIndex] = useState(0)
+  const [activeProfile, setActiveProfile] = useState<ShopperProfile>(DEFAULT_PROFILE)
   const [isMorphing, setIsMorphing] = useState(false)
   const [showDetails, setShowDetails] = useState(true)
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [currentProfileIndex, setCurrentProfileIndex] = useState(0)
+  const previousTraitsRef = useRef<number[]>([10, 10, 10, 10, 10])
 
-  const currentProfile = SHOPPER_PROFILES[currentProfileIndex]
+  const currentProfile = activeProfile
 
   useEffect(() => {
-    intervalRef.current = setInterval(() => {
-      setIsMorphing(true)
-      setShowDetails(false)
+    // Subscribe to live profile updates
+    const unsubscribe = liveEventBus.subscribe((event) => {
+      if (event.eventType === 'profile_update') {
+        const liveProfile = event.properties as unknown as any;
 
-      setTimeout(() => {
-        setIsMorphing(false)
-        setShowDetails(true)
-      }, 1200)
+        // Ensure scores never decrease - take maximum of previous and new values
+        const cumulativeTraits = liveProfile.traits.map((newValue: number, index: number) => {
+          return Math.max(newValue, previousTraitsRef.current[index] || 0);
+        });
 
-      setCurrentProfileIndex((prev) => (prev + 1) % SHOPPER_PROFILES.length)
-    }, CYCLE_DURATION)
+        // Update the ref with new cumulative values
+        previousTraitsRef.current = cumulativeTraits;
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [currentProfileIndex])
+        setActiveProfile({
+          type: liveProfile.type,
+          traits: cumulativeTraits,
+          confidence: liveProfile.confidence,
+          signals: ["Live Action Detected"],
+          incentive: liveProfile.incentive,
+          incentiveReason: liveProfile.incentiveReason,
+          sessionId: liveProfile.sessionId,
+          timeOnSite: liveProfile.timeOnSite,
+          signalsDetected: liveProfile.signalsDetected,
+          lastBehavior: "Active"
+        });
+
+        // Trigger morph animation
+        setIsMorphing(true);
+        setShowDetails(false);
+        setTimeout(() => {
+          setIsMorphing(false);
+          setShowDetails(true);
+        }, 600);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [])
 
   // Get status color based on confidence
   const getStatusColor = (confidence: number) => {

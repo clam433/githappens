@@ -24,7 +24,165 @@ export function LiveEventsNarration() {
         }) + ' EST';
     };
 
-    // Generate detailed narration from event type and properties
+    // AI Shopper Analysis State
+    type ShopperState = {
+        viewedProducts: Set<string>;
+        cartTotal: number;
+        cartItems: number;
+        checkoutVisits: number;
+        lastEventTime: number;
+        hesitationCount: number;
+        categoriesViewed: Set<string>;
+        hasAddedToCart: boolean;
+        sessionStartTime: number;
+    };
+
+    const shopperProfile = useRef<ShopperState>({
+        viewedProducts: new Set(),
+        cartTotal: 0,
+        cartItems: 0,
+        checkoutVisits: 0,
+        lastEventTime: Date.now(),
+        hesitationCount: 0,
+        categoriesViewed: new Set(),
+        hasAddedToCart: false,
+        sessionStartTime: Date.now(),
+    });
+
+    // Calculate and broadcast Shopper Profile locally (Fast Path)
+    const broadcastProfileUpdate = (state: ShopperState, aiData?: any) => {
+        if (aiData) {
+            console.log("AI Agent: Broadcasting profile update (AI Autoritative)", aiData);
+            // Authoritative AI Update
+            liveEventBus.push('profile_update', {
+                traits: [
+                    aiData.scores.hesitancy,
+                    aiData.scores.price_sense,
+                    aiData.scores.research,
+                    aiData.scores.decision,
+                    aiData.scores.engagement
+                ],
+                type: aiData.current_archetype,
+                confidence: aiData.confidence || aiData.confidence_score,
+                is_confirmed: aiData.is_confirmed,
+                incentive: aiData.next_best_action,
+                incentiveReason: "AI Strategy",
+                sessionId: "LIVE-" + state.sessionStartTime.toString().slice(-4),
+                signalsDetected: state.viewedProducts.size + state.cartItems + state.checkoutVisits,
+                timeOnSite: `${Math.floor((Date.now() - state.sessionStartTime) / 60000)}m ${Math.floor(((Date.now() - state.sessionStartTime) % 60000) / 1000)}s`
+            });
+            return;
+        }
+
+        // --- Local Heuristics Fallback ---
+        // Calculate basic scores based on state if AI is unavailable
+        const scores = {
+            hesitancy: Math.min(100, (state.hesitationCount * 20) + (state.viewedProducts.size > 4 ? 30 : 10)),
+            price_sense: state.cartTotal > 15 ? 40 : 70,
+            research: Math.min(100, state.viewedProducts.size * 20),
+            decision: Math.min(100, (state.cartItems * 30) + (state.checkoutVisits * 35)),
+            engagement: Math.min(100, (state.viewedProducts.size * 10) + 20)
+        };
+
+        let archetype = "Analyzing...";
+        if (scores.decision > 70) archetype = "Surgical Buyer (Local)";
+        else if (scores.research > 60) archetype = "Hesitant Researcher (Local)";
+        else if (scores.hesitancy > 50) archetype = "Anxious Shopper (Local)";
+
+        console.log("AI Agent: Falling back to Local Heuristics", scores);
+
+        liveEventBus.push('profile_update', {
+            traits: [scores.hesitancy, scores.price_sense, scores.research, scores.decision, scores.engagement],
+            type: archetype,
+            confidence: 50, // Local is less confident
+            is_confirmed: false,
+            incentive: state.cartItems > 0 ? "Limited Time Offer" : "Explore More",
+            incentiveReason: "Heuristic fallback",
+            sessionId: "LOCAL-" + state.sessionStartTime.toString().slice(-4),
+            signalsDetected: state.viewedProducts.size + state.cartItems,
+            timeOnSite: "Local Tracking"
+        });
+    };
+
+    // Update State (MUTATION - Run Once)
+    const updateShopperState = (event: LiveEvent) => {
+        const type = event.eventType.toLowerCase();
+        const props = event.properties || {};
+        const state = shopperProfile.current;
+        const now = Date.now();
+
+        state.lastEventTime = now;
+
+        // Track Product Views
+        if (type.includes('product_viewed')) {
+            const productName = (props.product_name as string) || 'unknown product';
+            state.viewedProducts.add(productName);
+        }
+
+        // Track Cart Actions
+        if (type.includes('add_to_cart')) {
+            state.hasAddedToCart = true;
+            state.cartItems++;
+            const price = props.price ? Number(props.price) : 0;
+            state.cartTotal += price;
+        }
+        if (type.includes('remove_from_cart')) {
+            state.cartItems = Math.max(0, state.cartItems - 1);
+            state.hesitationCount++; // Removal is a hesitation signal
+        }
+
+        // Track Checkout
+        if (type.includes('checkout_started')) state.checkoutVisits++;
+        if (type.includes('checkout_exit')) state.hesitationCount++;
+    };
+
+
+    // AI Agent Engine
+    const askAgent = async (event: LiveEvent, currentState: ShopperState): Promise<string | null> => {
+        // Skip AI for high-frequency low-value events locally if needed, 
+        // but for this demo we want "Thinking Out Loud" on interesting actions.
+        if (event.eventType.includes('scroll') || event.eventType.includes('form')) return null;
+
+        try {
+            console.log("AI Agent: Requesting analysis for", event.eventType);
+            const response = await fetch('/api/ai/narrate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    event,
+                    shopperState: {
+                        ...currentState,
+                        viewedProducts: Array.from(currentState.viewedProducts),
+                        categoriesViewed: Array.from(currentState.categoriesViewed)
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                console.error("AI Agent: Route error", response.status, errorData);
+                // Trigger Local Fallback on API failure
+                broadcastProfileUpdate(currentState);
+                const rawError = errorData.debug_error || errorData.message || "Unknown Error";
+                return `⚠️ AI Error: ${rawError.substring(0, 40)}... (Falling back)`;
+            }
+
+            const data = await response.json();
+            console.log("AI Agent: Response received", data);
+
+            // Broadcast the AI's deep analysis to the visualizer
+            if (data.scores) {
+                broadcastProfileUpdate(currentState, data);
+            }
+
+            return data.live_narration;
+        } catch (error) {
+            console.error("AI Error", error);
+            broadcastProfileUpdate(currentState); // Fallback on network error too
+            return `❌ Network Error: Using Local Detective.`;
+        }
+    };
+
     const generateNarration = (event: LiveEvent): string => {
         const type = event.eventType.toLowerCase();
         const time = formatTime(event.timestamp);
@@ -230,9 +388,47 @@ export function LiveEventsNarration() {
     useEffect(() => {
         if (!isLive) return;
 
+        let debounceTimer: NodeJS.Timeout;
+
         const handleEvent = (event: LiveEvent) => {
-            const narration = generateNarration(event);
-            addNarration(narration);
+            // Special handling for UI optimization triggers
+            if (event.eventType === 'ui_optimization_triggered') {
+                const props = event.properties as any;
+                const uiChange = props.uiChange || "Unknown";
+                const triggerMetric = props.triggerMetric || "Unknown";
+                const archetype = props.archetype || "Unknown";
+
+                const announcement = `🚀 UI OPTIMIZATION ACTIVATED: ${triggerMetric} metric exceeded 80% threshold, confirming ${archetype} behavior. Implementing ${uiChange} to maximize conversion.`;
+                addNarration(announcement);
+                return; // Don't process this as a regular event
+            }
+
+            // 1. Immediate Local Narration (Fast feedback)
+            const localNarration = generateNarration(event);
+            addNarration(localNarration);
+
+            // 2. Update Internal State
+            updateShopperState(event);
+
+            // 3. Ask AI for Deep Analysis (Debounced to prevent spamming)
+            // Only for "Meaningful" events
+            const isMeaningful = event.eventType.match(/viewed|viewing|cart|checkout|search|purchase|click|scan/i);
+
+            if (isMeaningful) {
+                console.log("AI Agent: Triggering AI for meaningful event", event.eventType);
+                clearTimeout(debounceTimer);
+
+                debounceTimer = setTimeout(() => {
+                    if (isMeaningful) {
+                        console.log("[AI Trigger] Meaningful event detected, calling AI...");
+                        askAgent(event, shopperProfile.current).then(narration => {
+                            if (narration) addNarration(narration);
+                        });
+                    }
+                }, 5000); // 5 second debounce for free tier rate limits
+            } else {
+                // console.log("AI Agent: Skipping non-meaningful event", event.eventType);
+            }
         };
 
         // Subscribe to new events
@@ -247,6 +443,7 @@ export function LiveEventsNarration() {
 
         return () => {
             unsubscribe();
+            clearTimeout(debounceTimer);
             if (typingRef.current) clearInterval(typingRef.current);
         };
     }, [isLive]);
@@ -261,9 +458,30 @@ export function LiveEventsNarration() {
         <div className="bg-zinc-900/60 backdrop-blur border border-zinc-800/50 rounded-xl overflow-hidden h-full flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/50 flex-shrink-0">
-                <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${isTyping ? "bg-cyan-400 animate-pulse" : "bg-emerald-400"}`} />
-                    <span className="text-xs font-medium text-zinc-200">Live Narration</span>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${isTyping ? "bg-cyan-400 animate-pulse" : "bg-emerald-400"}`} />
+                        <span className="text-xs font-medium text-zinc-200">Live Narration</span>
+                    </div>
+                    {/* Engine Status Badge */}
+                    <div className="px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800/50 flex items-center gap-1.5">
+                        <div className={`w-1 h-1 rounded-full ${lines.some(l => l.includes("Heuristics")) ? "bg-amber-400" : "bg-cyan-400"}`} />
+                        <span className="text-[9px] font-mono text-zinc-400 uppercase tracking-tighter">
+                            {lines.some(l => l.includes("Heuristics") || l.includes("Local")) ? "Local Heuristics" : "AI Detective Agent"}
+                        </span>
+                    </div>
+                    <button
+                        onClick={() => {
+                            const mockEvent = { eventType: 'MANUAL_PING', timestamp: new Date(), id: 'ping' };
+                            addNarration("[System] Pinging AI Detective for link status...");
+                            askAgent(mockEvent as any, shopperProfile.current).then(res => {
+                                if (res) addNarration(res);
+                            });
+                        }}
+                        className="text-[9px] uppercase tracking-tighter text-cyan-400/50 hover:text-cyan-400 transition-colors ml-2"
+                    >
+                        Test AI
+                    </button>
                 </div>
                 <button
                     onClick={() => setIsLive(!isLive)}
