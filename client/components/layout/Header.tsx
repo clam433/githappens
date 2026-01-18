@@ -2,9 +2,12 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { ShoppingCart, Truck, Package, AlertTriangle } from "lucide-react"
 import { useCart } from "@/context/CartContext"
 import { useUIOptimization, ShopperType } from "@/context/UIOptimizationContext"
+import { parseAmplitudeCsv } from "@/lib/parseCsv"
+import { buildSingleProfileFromCharts } from "@/lib/profile"
 
 export function Header() {
   const { totalItems } = useCart()
@@ -19,11 +22,45 @@ export function Header() {
   } = useUIOptimization()
 
   const activeType = forcedType ?? shopperType
+  const [isMatching, setIsMatching] = useState(false);
 
   const setTypeFromToggle = (target: ShopperType) => {
     // if you click the same one again, reset to unknown
     if (activeType === target) setShopperType("unknown")
     else setShopperType(target)
+  }
+
+    // 👇 this is the important part
+  const handleMatchPreferences = async () => {
+    try {
+      setIsMatching(true)
+
+      const AVG_SESSION_CHART_ID = "qkrahmgz"
+      const CHECKOUT_TIME_CHART_ID = "1tvzngd9"
+
+      const [avgCsv, checkoutCsv] = await Promise.all([
+        fetch(`/api/amplitude/chart/${AVG_SESSION_CHART_ID}/csv`, { cache: "no-store" }).then((r) => r.text()),
+        fetch(`/api/amplitude/chart/${CHECKOUT_TIME_CHART_ID}/csv`, { cache: "no-store" }).then((r) => r.text()),
+      ])
+
+      const avgParsed = parseAmplitudeCsv(avgCsv)
+      const checkoutParsed = parseAmplitudeCsv(checkoutCsv)
+
+      const profile = buildSingleProfileFromCharts({
+        avgSession: avgParsed,
+        checkout: checkoutParsed,
+      })
+
+      // Map computed profile -> your UIOptimization types
+      const detectedType: ShopperType =
+        profile.type === "Confident Shopper" ? "decisive" : "hesitancy"
+
+      setShopperType(detectedType) // ✅ this will toggle the right UI flags automatically
+    } catch (err) {
+      console.error("Match preferences failed:", err)
+    } finally {
+      setIsMatching(false)
+    }
   }
 
   return (
@@ -33,9 +70,20 @@ export function Header() {
         <p className="text-sm text-muted-foreground">UofTHacks 13 Merch</p>
       </div>
 
-      {/* Demo toggles: set shopper type (drives flags automatically) */}
       <div className="flex items-center gap-2">
+        {/* Match Preferences */}
         <button
+          onClick={handleMatchPreferences}
+          disabled={isMatching}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all
+            ${isMatching ? "opacity-60 cursor-not-allowed" : ""}
+            bg-secondary text-secondary-foreground hover:bg-secondary/80`}
+          title="Match preferences"
+        >
+          <span className="hidden xl:inline">{isMatching ? "Matching..." : "Match Preferences"}</span>
+        </button>
+
+      <button
           onClick={() => setTypeFromToggle("hesitancy")}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
             freeShippingThresholdEnabled
