@@ -1,8 +1,6 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Hardcode the key here just for the test script to be 100% sure
-// User provided: AIzaSyBWfAHrMeIXc5cSV-cqnc_a5h_y7EB7Ftw
-const apiKey = "AIzaSyBWfAHrMeIXc5cSV-cqnc_a5h_y7EB7Ftw";
+const apiKey = GEMINI_API_KEY;
 
 async function test() {
     console.log("Testing API Key:", apiKey.slice(0, 10) + "...");
